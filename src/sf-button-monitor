@@ -3,6 +3,10 @@ use strict;
 use warnings;
 use Time::HiRes qw(time);
 
+my $PTRN_MAX_MILLIS = 350;
+
+sub trimPattern(@);
+sub formatPattern(@);
 sub nowMillis();
 
 my $BUTTONS = {
@@ -15,21 +19,64 @@ my $BUTTONS = {
 sub main(@){
   open FH, "< /dev/input/by-path/platform-gpio_keys.105-event";
   my $byteStr;
+  my @pattern;
   my $stdOut = select();
   my $lastButtonMillis = nowMillis();
   while(1){
     read FH, $byteStr, 16;
     my @bytesDec = map {ord $_} split //, $byteStr;
     my $button = $bytesDec[10];
-    my $val = $bytesDec[12];
+    my $value = $bytesDec[12];
     if(defined $$BUTTONS{$button}){
       my $now = nowMillis();
       my $elapsed = $now - $lastButtonMillis;
       $lastButtonMillis = $now;
-      print "BUTTON: $$BUTTONS{$button} => $val (${elapsed}ms)\n";
+      print "BUTTON: $$BUTTONS{$button} => $value (${elapsed}ms)\n";
       $stdOut->flush();
+
+      my $event = {
+        button => $button,
+        value => $value,
+        elapsed => $elapsed,
+      };
+      push @pattern, $event;
+      @pattern = trimPattern @pattern;
     }
   }
+}
+
+sub trimPattern(@){
+  my (@pattern) = @_;
+  my %states = map {$_ => 0} sort keys %$BUTTONS;
+  my $trimIndex = 0;
+  for(my $i=0; $i<@pattern; $i++){
+    my $event = $pattern[$i];
+    my @keysDown = grep {$states{$_}} sort keys %states;
+    if(@keysDown == 0 and $$event{elapsed} > $PTRN_MAX_MILLIS){
+      $trimIndex = $i;
+    }
+    $states{$$event{button}} = $$event{value};
+  }
+  if($trimIndex > 0){
+    @pattern = @pattern[$trimIndex..$#pattern];
+  }
+  return @pattern;
+}
+
+sub formatPattern(@){
+  my @eventFmts;
+  my @pattern = @_;
+  for my $event(@pattern){
+    my $button = $$event{button};
+    my $buttonName = $$BUTTONS{$button};
+    if($$event{value}){
+      push @eventFmts, $buttonName;
+    }else{
+      push @eventFmts, lc $buttonName;
+    }
+  }
+
+  return "  @eventFmts\n";
 }
 
 sub nowMillis(){
