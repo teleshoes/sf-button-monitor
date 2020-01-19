@@ -2,7 +2,25 @@
 use strict;
 use warnings;
 
+my $BUTTONS = {
+  115 => "VOL_UP",
+  114 => "VOL_DOWN",
+  16  => "CAM_HALF",
+  254 => "CAM_FULL",
+};
+
 sub main(@){
+  open FH, "< /dev/input/by-path/platform-gpio_keys.105-event";
+  my $byteStr;
+  while(1){
+    read FH, $byteStr, 16;
+    my @bytesDec = map {ord $_} split //, $byteStr;
+    my $button = $bytesDec[10];
+    my $val = $bytesDec[12];
+    if(defined $$BUTTONS{$button}){
+      print "BUTTON: $$BUTTONS{$button} => $val\n";
+    }
+  }
 }
 
 &main(@ARGV);
