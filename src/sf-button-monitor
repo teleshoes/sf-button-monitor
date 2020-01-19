@@ -1,6 +1,9 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+use Time::HiRes qw(time);
+
+sub nowMillis();
 
 my $BUTTONS = {
   115 => "VOL_UP",
@@ -13,16 +16,24 @@ sub main(@){
   open FH, "< /dev/input/by-path/platform-gpio_keys.105-event";
   my $byteStr;
   my $stdOut = select();
+  my $lastButtonMillis = nowMillis();
   while(1){
     read FH, $byteStr, 16;
     my @bytesDec = map {ord $_} split //, $byteStr;
     my $button = $bytesDec[10];
     my $val = $bytesDec[12];
     if(defined $$BUTTONS{$button}){
-      print "BUTTON: $$BUTTONS{$button} => $val\n";
+      my $now = nowMillis();
+      my $elapsed = $now - $lastButtonMillis;
+      $lastButtonMillis = $now;
+      print "BUTTON: $$BUTTONS{$button} => $val (${elapsed}ms)\n";
       $stdOut->flush();
     }
   }
+}
+
+sub nowMillis(){
+  return int(time * 1000.0 + 0.5);
 }
 
 &main(@ARGV);
