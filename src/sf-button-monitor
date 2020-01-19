@@ -12,6 +12,7 @@ my $BUTTONS = {
 sub main(@){
   open FH, "< /dev/input/by-path/platform-gpio_keys.105-event";
   my $byteStr;
+  my $stdOut = select();
   while(1){
     read FH, $byteStr, 16;
     my @bytesDec = map {ord $_} split //, $byteStr;
@@ -19,6 +20,7 @@ sub main(@){
     my $val = $bytesDec[12];
     if(defined $$BUTTONS{$button}){
       print "BUTTON: $$BUTTONS{$button} => $val\n";
+      $stdOut->flush();
     }
   }
 }
