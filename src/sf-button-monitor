@@ -9,6 +9,7 @@ my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub formatPattern(@);
+sub checkAction(@);
 sub allEq(@);
 sub nowMillis();
 
@@ -44,6 +45,12 @@ sub main(@){
       };
       push @pattern, $event;
       @pattern = trimPattern @pattern;
+
+      my $command = checkAction(@pattern);
+      if(defined $command){
+        @pattern = ();
+        system "$command &";
+      }
     }
   }
 }
@@ -122,6 +129,13 @@ sub formatPattern(@){
   }
 
   return "  @eventFmts\n";
+}
+
+sub checkAction(@){
+  my @pattern = @_;
+  print formatPattern(@pattern);
+  select()->flush();
+  return undef;
 }
 
 sub allEq(@){
