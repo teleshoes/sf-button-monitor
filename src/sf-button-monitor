@@ -135,6 +135,26 @@ sub checkAction(@){
   my @pattern = @_;
   print formatPattern(@pattern);
   select()->flush();
+
+  ###HACK
+
+  if(@pattern == 4){
+    my ($p1, $r1, $p2, $r2) = @pattern;
+    next if $$p1{value} != 1;
+    next if $$r1{value} != 0;
+    next if $$p2{value} != 1;
+    next if $$r2{value} != 0;
+    my @buttons = map {$$_{button}} @pattern;
+    next if not allEq(@buttons);
+
+    if($buttons[0] == 115){
+      return "klomp-cmd pause";
+    }elsif($buttons[0] == 114){
+      return "flashlight-toggle";
+    }
+  }
+
+  ###HACK
   return undef;
 }
 
