@@ -122,13 +122,23 @@ sub trimPattern(@){
       $trimIndex = $i;
     }
     if($$event{type} eq $TYPE_PRESS){
+      if($states{$btnId} == 1){
+        print "    WARNING: press without release for $BTN_NAMES{$btnId}\n";
+        $trimIndex = $i+1;
+      }
       $states{$$event{buttonId}} = 1;
     }elsif($$event{type} eq $TYPE_RELEASE){
+      if($states{$btnId} == 0){
+        print "    WARNING: release without press for $BTN_NAMES{$btnId}\n";
+        $trimIndex = $i+1;
+      }
       $states{$$event{buttonId}} = 0;
     }
   }
 
-  if($trimIndex > 0){
+  if($trimIndex >= @pattern){
+    @pattern = ();
+  }elsif($trimIndex > 0){
     @pattern = @pattern[$trimIndex..$#pattern];
   }
 
