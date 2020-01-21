@@ -8,7 +8,7 @@ my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
 
 my $DEFAULT_CONFIG_CONTENTS = ''
-  . "action=torchToggle,vd vd,screenLocked\n"
+  . "action=torch,vd vd,screenLocked\n"
   ;
 
 my $PTRN_MAX_MILLIS = 350;
@@ -59,10 +59,10 @@ my $usage = "Usage:
     one per line, formatted like:
     action=ACTION,PTRN,CONDITION
 
-  ACTION    = cmd(<CMD>) | torchToggle
+  ACTION    = cmd(<CMD>) | torch
                 action to perform
                   cmd:         run shell command <CMD>
-                  torchToggle: toggle flashlight
+                  torch:       toggle flashlight
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
   CONDITION = always | screenLocked | screenUnlocked
@@ -122,8 +122,8 @@ my $TYPE_PRESS = "press";
 my $TYPE_RELEASE = "release";
 
 my %DBUS_ACTIONS = (
-  torchToggle => dbusSendCmd('com.jolla.settings.system.flashlight', '/<DEST_OBJ>',
-                   '<DEST>.toggleFlashlight'),
+  torch      => dbusSendCmd('com.jolla.settings.system.flashlight', '/<DEST_OBJ>',
+                  '<DEST>.toggleFlashlight'),
 );
 
 sub main(@){
