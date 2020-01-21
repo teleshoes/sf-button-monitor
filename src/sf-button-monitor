@@ -23,7 +23,9 @@ sub formatPattern(@);
 sub condensePattern(@);
 sub parsePatternString($);
 sub checkAction($@);
+sub checkCondition($);
 sub getActionCommand($);
+sub isScreenLocked();
 sub allEq(@);
 sub nowMillis();
 
@@ -170,7 +172,7 @@ sub main(@){
     @pattern = removeAccidentalDoubleClicks(@pattern);
 
     for my $action(@actions){
-      if(checkAction($action, @pattern)){
+      if(checkAction($action, @pattern) and checkCondition($$action{condition})){
         if(not $select->can_read($PTRN_MAX_MILLIS/1000.0)){
           my $command = getActionCommand $$action{action};
           print "RUNNING $command\n";
@@ -299,6 +301,9 @@ sub parseConfigFileActions($){
         pattern => [@pattern],
         condition => $condition,
       };
+      if($condition !~ /^(always|screenLocked|screenUnlocked)$/i){
+        die "invalid condition: $condition\n";
+      }
     }
   }
 
@@ -423,6 +428,20 @@ sub checkAction($@){
   }
 }
 
+sub checkCondition($){
+  my ($condition) = @_;
+
+  if($condition =~ /always/i){
+    return 1;
+  }elsif($condition =~ /screenLocked/i){
+    return isScreenLocked() ? 1 :0;
+  }elsif($condition =~ /screenUnlocked/i){
+    return isScreenLocked() ? 0 : 1;
+  }else{
+    die "ERROR: invalid condition $condition\n";
+  }
+}
+
 sub getActionCommand($){
   my ($actionStr) = @_;
   if($actionStr =~ /^(torchToggle)$/){
@@ -436,6 +455,36 @@ sub getActionCommand($){
     return $1;
   }else{
     die "invalid action: $actionStr\n";
+  }
+}
+
+sub isScreenLocked(){
+  my @cmd = qw(
+    dbus-send
+      --system
+      --dest=com.nokia.mce
+      --print-reply
+      --type=method_call
+      /com/nokia/mce/request
+      com.nokia.mce.request.get_display_status
+  );
+  print "@cmd\n";
+  open CMD, "-|", @cmd or die "could not run @cmd\n$!\n";
+  my $out = join '', <CMD>;
+  close CMD;
+
+  my $status = "";
+  if($out =~ /^method.*\n\s*string\s*['"](on|off)['"]\s*$/){
+    $status = $1;
+  }
+
+  if($status eq "on"){
+    return 0;
+  }elsif($status eq "off"){
+    return 1;
+  }else{
+    print STDERR "could not read display status with @cmd\n";
+    return 0;
   }
 }
 
