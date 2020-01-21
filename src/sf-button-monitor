@@ -40,12 +40,18 @@ my $usage = "Usage:
     -perform actions that match event patterns and system conditions
 ";
 
-my $BUTTONS = {
-  115 => "VOL_UP",
-  114 => "VOL_DOWN",
-  16  => "CAM_HALF",
-  254 => "CAM_FULL",
-};
+my @BUTTONS = (
+  [qw(115 VOL_UP   vu)],
+  [qw(114 VOL_DOWN vd)],
+  [qw(16  CAM_HALF ch)],
+  [qw(254 CAM_FULL cf)],
+);
+my %OK_BUTTON_IDS = map {$$_[0] => 1} @BUTTONS;
+my %BTN_NAMES = map {$$_[0] => $$_[1]} @BUTTONS;
+my %BTN_SHORTNAMES = map {$$_[0] => $$_[2]} @BUTTONS;
+
+my $TYPE_PRESS = "press";
+my $TYPE_RELEASE = "release";
 
 sub main(@){
   if(@_ == 1 and $_[0] =~ /^(-h|--help)$/){
@@ -64,18 +70,20 @@ sub main(@){
   my $lastButtonMillis = nowMillis();
   open $inputDevFH, "< $INPUT_DEV";
   while(1){
-    my ($button, $value) = readButtonEvent($inputDevFH);
+    my ($buttonId, $value) = readButtonEvent($inputDevFH);
 
     my $now = nowMillis();
-    my $elapsed = $now - $lastButtonMillis;
+    my $elapsedMillis = $now - $lastButtonMillis;
     $lastButtonMillis = $now;
-    print "BUTTON: $$BUTTONS{$button} => $value (${elapsed}ms)\n";
+
+    my $type = $value ? $TYPE_PRESS : $TYPE_RELEASE;
 
     my $event = {
-      button => $button,
-      value => $value,
-      elapsed => $elapsed,
+      buttonId      => $buttonId,
+      type          => $type,
+      elapsedMillis => $elapsedMillis,
     };
+
     push @pattern, $event;
     @pattern = trimPattern @pattern;
 
@@ -94,26 +102,32 @@ sub readButtonEvent($){
   while(1){
     read $inputDevFH, $byteStr, 16;
     my @bytesDec = map {ord $_} split //, $byteStr;
-    my $button = $bytesDec[10];
+    my $buttonId = $bytesDec[10];
     my $value = $bytesDec[12];
-    if(defined $$BUTTONS{$button}){
-      return ($button, $value);
+    if(defined $OK_BUTTON_IDS{$buttonId}){
+      return ($buttonId, $value);
     }
   }
 }
 
 sub trimPattern(@){
   my (@pattern) = @_;
-  my %states = map {$_ => 0} sort keys %$BUTTONS;
+  my %states = map {$_ => 0} sort keys %OK_BUTTON_IDS;
   my $trimIndex = 0;
   for(my $i=0; $i<@pattern; $i++){
     my $event = $pattern[$i];
+    my $btnId = $$event{buttonId};
     my @keysDown = grep {$states{$_}} sort keys %states;
-    if(@keysDown == 0 and $$event{elapsed} > $PTRN_MAX_MILLIS){
+    if(@keysDown == 0 and $$event{elapsedMillis} > $PTRN_MAX_MILLIS){
       $trimIndex = $i;
     }
-    $states{$$event{button}} = $$event{value};
+    if($$event{type} eq $TYPE_PRESS){
+      $states{$$event{buttonId}} = 1;
+    }elsif($$event{type} eq $TYPE_RELEASE){
+      $states{$$event{buttonId}} = 0;
+    }
   }
+
   if($trimIndex > 0){
     @pattern = @pattern[$trimIndex..$#pattern];
   }
@@ -131,18 +145,18 @@ sub removeAccidentalDoubleClicks(@){
     my $initRelease = $pattern[$i+1];
     my $dupePress = $pattern[$i+2];
 
-    next if $$initPress{value} != 1;
-    next if $$initRelease{value} != 0;
-    next if $$dupePress{value} != 1;
+    next if $$initPress{type} ne $TYPE_PRESS;
+    next if $$initRelease{type} ne $TYPE_RELEASE;
+    next if $$dupePress{type} ne $TYPE_PRESS;
 
     my @events = ($initPress, $initRelease, $dupePress);
-    my @buttons = map {$$_{button}} @events;
-    next if not allEq(@buttons);
+    my @buttonIds = map {$$_{buttonId}} @events;
+    next if not allEq(@buttonIds);
 
-    next if $$initRelease{elapsed} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
-    next if $$dupePress{elapsed} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
+    next if $$initRelease{elapsedMillis} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
+    next if $$dupePress{elapsedMillis} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
 
-    print "    ACCIDENTAL DOUBLE-CLICK DETECTED: $$initPress{button}\n";
+    print "    ACCIDENTAL DOUBLE-CLICK DETECTED: $$initPress{buttonId}\n";
     $dupeIndexes{$i+1} = 1; #skip the initial release
     $dupeIndexes{$i+2} = 1; #skip the extra press
   }
@@ -165,9 +179,9 @@ sub formatPattern(@){
   my @eventFmts;
   my @pattern = @_;
   for my $event(@pattern){
-    my $button = $$event{button};
-    my $buttonName = $$BUTTONS{$button};
-    if($$event{value}){
+    my $buttonId = $$event{buttonId};
+    my $buttonName = $$BTN_NAMES{$buttonId};
+    if($$event{type} eq $TYPE_PRESS){
       push @eventFmts, $buttonName;
     }else{
       push @eventFmts, lc $buttonName;
