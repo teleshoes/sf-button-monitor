@@ -302,11 +302,11 @@ sub sortActionsLongestFirst(@){
   my @actions = @_;
   return sort {
     my $ptrnLenA = @{$$a{pattern}};
-    my $ptrnLenB = @{$$a{pattern}};
+    my $ptrnLenB = @{$$b{pattern}};
     my $actionA = $$a{action};
-    my $actionB = $$a{action};
+    my $actionB = $$b{action};
     my $conditionA = $$a{condition};
-    my $conditionB = $$a{condition};
+    my $conditionB = $$b{condition};
 
     return 0
       || $ptrnLenB <=> $ptrnLenA
