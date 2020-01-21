@@ -8,6 +8,7 @@ my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
 my $PTRN_MAX_MILLIS = 350;
 my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 
+sub readButtonEvent($);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub formatPattern(@);
@@ -57,34 +58,46 @@ sub main(@){
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
-  my $byteStr;
+
+  my $inputDevFH;
   my @pattern;
   my $lastButtonMillis = nowMillis();
-  open FH, "< $INPUT_DEV";
+  open $inputDevFH, "< $INPUT_DEV";
   while(1){
-    read FH, $byteStr, 16;
+    my ($button, $value) = readButtonEvent($inputDevFH);
+
+    my $now = nowMillis();
+    my $elapsed = $now - $lastButtonMillis;
+    $lastButtonMillis = $now;
+    print "BUTTON: $$BUTTONS{$button} => $value (${elapsed}ms)\n";
+
+    my $event = {
+      button => $button,
+      value => $value,
+      elapsed => $elapsed,
+    };
+    push @pattern, $event;
+    @pattern = trimPattern @pattern;
+
+    my $command = checkAction(@pattern);
+    if(defined $command){
+      @pattern = ();
+      system "$command &";
+    }
+  }
+}
+
+#blocks until a valid button press/release event and then returns it
+sub readButtonEvent($){
+  my ($inputDevFH) = @_;
+  my $byteStr;
+  while(1){
+    read $inputDevFH, $byteStr, 16;
     my @bytesDec = map {ord $_} split //, $byteStr;
     my $button = $bytesDec[10];
     my $value = $bytesDec[12];
     if(defined $$BUTTONS{$button}){
-      my $now = nowMillis();
-      my $elapsed = $now - $lastButtonMillis;
-      $lastButtonMillis = $now;
-      print "BUTTON: $$BUTTONS{$button} => $value (${elapsed}ms)\n";
-
-      my $event = {
-        button => $button,
-        value => $value,
-        elapsed => $elapsed,
-      };
-      push @pattern, $event;
-      @pattern = trimPattern @pattern;
-
-      my $command = checkAction(@pattern);
-      if(defined $command){
-        @pattern = ();
-        system "$command &";
-      }
+      return ($button, $value);
     }
   }
 }
