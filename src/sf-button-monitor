@@ -311,6 +311,8 @@ sub parseConfigFileActions($){
       if($condition !~ /^(always|screenLocked|screenUnlocked)$/i){
         die "invalid condition: $condition\n";
       }
+    }else{
+      die "MALFORMED CONFIG LINE: $line";
     }
   }
 
