@@ -12,6 +12,7 @@ sub readButtonEvent($);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub formatPattern(@);
+sub condensePattern(@);
 sub checkAction(@);
 sub allEq(@);
 sub nowMillis();
@@ -38,6 +39,42 @@ my $usage = "Usage:
     -parse bytes into button press/release events
     -split sequences of events into patterns
     -perform actions that match event patterns and system conditions
+
+  BTN_PTRN  = <EVENT> | <EVENT> <BTN_PTRN>
+               a full pattern string containing button press/releases
+  EVENT     = <PRESS> | <RELEASE> | <CLICK> | <GROUP>
+                a button press and/or release
+  PRESS     = <BTN>-press
+                pressing button named <BTN>
+  RELEASE   = <BTN>-press
+                releasing button named <BTN>
+  CLICK     = <BTN>
+                same as: <BTN>-press <BTN>-release
+  GROUP     = <BTN>() | <BTN>( <BTN_PTRN> )
+                same as: <BTN>-press <BTN_PTRN> <BTN>-release
+  BTN       = vu | vd | ch | cf
+                the name of a physical hardware button
+                  vu: volume up
+                  vd: volume down
+                  ch: camera half
+                  cf: camera full
+
+  BTN_PTRN is a sequence of button presses/releases, with optional short synonyms
+  e.g.:
+     vd-press vd-release =>
+         vd-press vd-release
+     vd =>
+         vd-press vd-release
+     vd() =>
+         vd-press vd-release
+     vd vd =>
+         vd-press vd-release vd-press vd-release
+     vd(vu) =>
+         vd-press vu-press vu-release vd-release
+     ch(vd vd(vu vu()) cf) =>
+         ch-press vd-press vd-release vd-press
+         vu-press vu-release vu-press vu-release
+         vd-release cf-press cf-release ch-release
 ";
 
 my @BUTTONS = (
@@ -86,6 +123,13 @@ sub main(@){
 
     push @pattern, $event;
     @pattern = trimPattern @pattern;
+
+    printf "EVENT: %8s => %-7s  %14dms  (%s)\n",
+      $BTN_NAMES{$$event{buttonId}},
+      $$event{type},
+      $$event{elapsedMillis},
+      formatPattern(@pattern),
+      ;
 
     my $command = checkAction(@pattern);
     if(defined $command){
@@ -166,7 +210,6 @@ sub removeAccidentalDoubleClicks(@){
     next if $$initRelease{elapsedMillis} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
     next if $$dupePress{elapsedMillis} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
 
-    print "    ACCIDENTAL DOUBLE-CLICK DETECTED: $$initPress{buttonId}\n";
     $dupeIndexes{$i+1} = 1; #skip the initial release
     $dupeIndexes{$i+2} = 1; #skip the extra press
   }
@@ -179,6 +222,10 @@ sub removeAccidentalDoubleClicks(@){
         push @newPattern, $pattern[$i];
       }
     }
+    printf "    FALSE DBL CLICK: %s => %s\n",
+      formatPattern(@pattern),
+      formatPattern(@newPattern),
+      ;
     @pattern = @newPattern;
   }
 
@@ -186,19 +233,35 @@ sub removeAccidentalDoubleClicks(@){
 }
 
 sub formatPattern(@){
-  my @eventFmts;
-  my @pattern = @_;
-  for my $event(@pattern){
-    my $buttonId = $$event{buttonId};
-    my $buttonName = $$BTN_NAMES{$buttonId};
-    if($$event{type} eq $TYPE_PRESS){
-      push @eventFmts, $buttonName;
-    }else{
-      push @eventFmts, lc $buttonName;
-    }
-  }
+  return join(" ", condensePattern(@_));
+}
 
-  return "  @eventFmts\n";
+sub condensePattern(@){
+  my @pattern = @_;
+  return () if @pattern == 0;
+  my $event = shift @pattern;
+  my $btnShortName = $BTN_SHORTNAMES{$$event{buttonId}};
+  if($$event{type} eq $TYPE_PRESS){
+    for(my $i=0; $i<@pattern; $i++){
+      my $btnRelEvent = $pattern[$i];
+      next if $$btnRelEvent{buttonId} != $$event{buttonId};
+      next if $$btnRelEvent{type} ne $TYPE_RELEASE;
+
+      my @group = @pattern[0..$i-1];
+      @pattern = @pattern[$i+1..$#pattern];
+
+      if(@group > 0){
+        return ("$btnShortName(", condensePattern(@group), ")", condensePattern(@pattern));
+      }else{
+        return ("$btnShortName", condensePattern(@pattern));
+      }
+    }
+    return ("$btnShortName-press");
+  }elsif($$event{type} eq $TYPE_RELEASE){
+    return ("$btnShortName-release", condensePattern(@pattern));
+  }else{
+    die "INVALID EVENT TYPE: $$event{type}\n";
+  }
 }
 
 sub checkAction(@){
