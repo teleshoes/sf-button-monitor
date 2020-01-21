@@ -15,6 +15,30 @@ sub checkAction(@);
 sub allEq(@);
 sub nowMillis();
 
+my $usage = "Usage:
+  Perform actions when Sailfish OS hardware buttons are pressed.
+
+  Supports volume up/down and camera half/full keys,
+    when screen is locked or unlocked.
+
+  Can run arbitrary shell commands, or a few built-in commands.
+
+  Works best with automatic display-on disabled (requires mcetool).
+    Install mcetool and run the following,
+    to prevent unlocking when camera/volume is pressed:
+      mcetool --set-exception-length-volume=0
+      mcetool --set-exception-length-camera=0
+
+  $0 -h | --help
+    display this message
+
+  $0
+    -listen to $INPUT_DEV
+    -parse bytes into button press/release events
+    -split sequences of events into patterns
+    -perform actions that match event patterns and system conditions
+";
+
 my $BUTTONS = {
   115 => "VOL_UP",
   114 => "VOL_DOWN",
@@ -23,6 +47,13 @@ my $BUTTONS = {
 };
 
 sub main(@){
+  if(@_ == 1 and $_[0] =~ /^(-h|--help)$/){
+    print $usage;
+    exit 0;
+  }elsif(@_ > 0){
+    die $usage;
+  }
+
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
