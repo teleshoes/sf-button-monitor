@@ -403,7 +403,7 @@ sub checkAction($@){
   my ($action, @pattern) = @_;
 
   my @actionPtrn = @{$$action{pattern}};
-  my $actionPtrnRe = join "\\s+", @actionPtrn;
+  my $actionPtrnRe = join ".*", @actionPtrn;
 
   my $patternStr = join " ", map {
     "$BTN_SHORTNAMES{$$_{buttonId}}-$$_{type}"
