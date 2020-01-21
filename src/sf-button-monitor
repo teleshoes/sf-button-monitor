@@ -4,6 +4,11 @@ use warnings;
 use Time::HiRes qw(time);
 
 my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
+my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
+
+my $DEFAULT_CONFIG_CONTENTS = ''
+  . "action=torchToggle,vd vd,screenLocked\n"
+  ;
 
 my $PTRN_MAX_MILLIS = 350;
 my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
@@ -11,9 +16,13 @@ my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 sub readButtonEvent($);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
+sub parseConfigFileActions($);
+sub sortActionsLongestFirst(@);
 sub formatPattern(@);
 sub condensePattern(@);
-sub checkAction(@);
+sub parsePatternString($);
+sub checkAction($@);
+sub getActionCommand($);
 sub allEq(@);
 sub nowMillis();
 
@@ -38,7 +47,26 @@ my $usage = "Usage:
     -listen to $INPUT_DEV
     -parse bytes into button press/release events
     -split sequences of events into patterns
+    -read actions and patterns from $CONFIG_FILE
     -perform actions that match event patterns and system conditions
+
+
+  actions are recorded in $CONFIG_FILE
+    one per line, formatted like:
+    action=ACTION,PTRN,CONDITION
+
+  ACTION    = cmd(<CMD>) | torchToggle
+                action to perform
+                  cmd: run the shell command in parentheses
+                  torchToggle: runs `dbus-send` for method:
+                         com.jolla.settings.system.flashlight.toggleFlashlight
+  CMD       = <any-string>
+                any shell command: EXEC ARG ARG...
+  CONDITION = always | screenLocked | screenUnlocked
+                when to allow the command to run
+                  always: always
+                  screenLocked: when display is off and screen is locked
+                  screenUnlocked: when display is on and screen is unlocked
 
   BTN_PTRN  = <EVENT> | <EVENT> <BTN_PTRN>
                a full pattern string containing button press/releases
@@ -102,6 +130,9 @@ sub main(@){
   select(STDOUT);
   $| = 1;
 
+  my @actions = parseConfigFileActions($CONFIG_FILE);
+  @actions = sortActionsLongestFirst @actions;
+
   my $inputDevFH;
   my @pattern;
   my $lastButtonMillis = nowMillis();
@@ -133,10 +164,13 @@ sub main(@){
 
     @pattern = removeAccidentalDoubleClicks(@pattern);
 
-    my $command = checkAction(@pattern);
-    if(defined $command){
-      @pattern = ();
-      system "$command &";
+    for my $action(@actions){
+      if(checkAction($action, @pattern)){
+        my $command = getActionCommand $$action{action};
+        print "RUNNING $command\n";
+        system "$command &";
+        @pattern = ();
+      }
     }
   }
 }
@@ -233,6 +267,55 @@ sub removeAccidentalDoubleClicks(@){
   return @pattern;
 }
 
+sub parseConfigFileActions($){
+  my ($file) = @_;
+  my $contents;
+  if(not -f $file){
+    $contents = $DEFAULT_CONFIG_CONTENTS;
+  }else{
+    open FH, "< $file" or die "could not read $file\n$!\n";
+    $contents = join '', <FH>;
+    close FH;
+  }
+
+  my $actionRe = "(?:cmd\\(.*\\)|torchToggle)";
+
+  my @actions;
+
+  my @lines = split /[\n\r]+/, $contents;
+  for my $line(@lines){
+    if($line =~ /^\s*action\s*=\s*($actionRe),([^,]+),(\w+)$/){
+      my ($action, $patternString, $condition) = ($1, $2, $3);
+      my @pattern = parsePatternString($patternString);
+      push @actions, {
+        action => $action,
+        pattern => [@pattern],
+        condition => $condition,
+      };
+    }
+  }
+
+  return @actions;
+}
+
+sub sortActionsLongestFirst(@){
+  my @actions = @_;
+  return sort {
+    my $ptrnLenA = @{$$a{pattern}};
+    my $ptrnLenB = @{$$a{pattern}};
+    my $actionA = $$a{action};
+    my $actionB = $$a{action};
+    my $conditionA = $$a{condition};
+    my $conditionB = $$a{condition};
+
+    return 0
+      || $ptrnLenB <=> $ptrnLenA
+      || $actionA cmp $actionB
+      || $conditionA cmp $conditionB
+      ;
+  } @actions;
+}
+
 sub formatPattern(@){
   return join(" ", condensePattern(@_));
 }
@@ -265,30 +348,88 @@ sub condensePattern(@){
   }
 }
 
-sub checkAction(@){
-  my @pattern = @_;
-  print formatPattern(@pattern);
+sub parsePatternString($){
+  my ($patternString) = @_;
 
-  ###HACK
+  my $btnRe = "(?:" . join("|", values %BTN_SHORTNAMES) . ")";
+  my $eventRe = "(?:$btnRe(?:-press|-release)?)";
 
-  if(@pattern == 4){
-    my ($p1, $r1, $p2, $r2) = @pattern;
-    next if $$p1{value} != 1;
-    next if $$r1{value} != 0;
-    next if $$p2{value} != 1;
-    next if $$r2{value} != 0;
-    my @buttons = map {$$_{button}} @pattern;
-    next if not allEq(@buttons);
+  $patternString = lc $patternString;
 
-    if($buttons[0] == 115){
-      return "klomp-cmd pause";
-    }elsif($buttons[0] == 114){
-      return "flashlight-toggle";
+  if($patternString =~ /^\s*$/){
+    return ();
+  }elsif($patternString =~ /^\s*($eventRe)(?:\s+|$)(.*)$/){
+    my ($event, $ptrn) = ($1, $2);
+    if($event =~ /^$btnRe$/){
+      return ("$event-press", "$event-release", parsePatternString($ptrn));
+    }else{
+      return ("$event", parsePatternString($ptrn));
     }
-  }
+  }elsif($patternString =~ /^\s*($btnRe)\s*\((.*)$/){
+    my ($btnName, $ptrn) = ($1, $2);
+    my $len = length $ptrn;
+    my $parensCount = 1;
+    my $closeParensIndex = undef;
+    for(my $i=0; $i<$len; $i++){
+      my $c = substr $ptrn, $i, 1;
+      if($c eq "("){
+        $parensCount++;
+      }elsif($c eq ")"){
+        $parensCount--;
+        if($parensCount == 0){
+          $closeParensIndex = $i;
+          last;
+        }
+      }
+    }
+    if(not defined $closeParensIndex){
+      die "unmatched open-parens: $patternString\n";
+    }
+    my $group = substr $ptrn, 0, $closeParensIndex;
+    my $suffix = substr $ptrn, $closeParensIndex+1;
 
-  ###HACK
-  return undef;
+    return (
+      "$btnName-press",
+      parsePatternString($group),
+      "$btnName-release",
+      parsePatternString($suffix),
+    );
+  }else{
+    die "invalid pattern: $patternString\n";
+  }
+}
+
+sub checkAction($@){
+  my ($action, @pattern) = @_;
+
+  my @actionPtrn = @{$$action{pattern}};
+  my $actionPtrnRe = join "\\s+", @actionPtrn;
+
+  my $patternStr = join " ", map {
+    "$BTN_SHORTNAMES{$$_{buttonId}}-$$_{type}"
+  } @pattern;
+
+  if($patternStr =~ /$actionPtrnRe/){
+    return 1;
+  }else{
+    return 0;
+  }
+}
+
+sub getActionCommand($){
+  my ($actionStr) = @_;
+  if($actionStr =~ /^(torchToggle)$/){
+    return ""
+      . "dbus-send --print-reply"
+      . " --dest=com.jolla.settings.system.flashlight"
+      . " /com/jolla/settings/system/flashlight"
+      . " com.jolla.settings.system.flashlight.toggleFlashlight"
+      ;
+  }elsif($actionStr =~ /^cmd\((.*)\)$/){
+    return $1;
+  }else{
+    die "invalid action: $actionStr\n";
+  }
 }
 
 sub allEq(@){
