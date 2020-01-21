@@ -131,6 +131,8 @@ sub main(@){
       formatPattern(@pattern),
       ;
 
+    @pattern = removeAccidentalDoubleClicks(@pattern);
+
     my $command = checkAction(@pattern);
     if(defined $command){
       @pattern = ();
@@ -186,7 +188,6 @@ sub trimPattern(@){
     @pattern = @pattern[$trimIndex..$#pattern];
   }
 
-  @pattern = removeAccidentalDoubleClicks(@pattern);
   return @pattern;
 }
 
