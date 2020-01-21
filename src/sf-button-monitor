@@ -27,6 +27,7 @@ sub checkCondition($);
 sub getActionCommand($);
 sub isScreenLocked();
 sub allEq(@);
+sub dbusSendCmd($$$@);
 sub nowMillis();
 
 my $usage = "Usage:
@@ -60,9 +61,8 @@ my $usage = "Usage:
 
   ACTION    = cmd(<CMD>) | torchToggle
                 action to perform
-                  cmd: run the shell command in parentheses
-                  torchToggle: runs `dbus-send` for method:
-                         com.jolla.settings.system.flashlight.toggleFlashlight
+                  cmd:         run shell command <CMD>
+                  torchToggle: toggle flashlight
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
   CONDITION = always | screenLocked | screenUnlocked
@@ -120,6 +120,11 @@ my %BTN_SHORTNAMES = map {$$_[0] => $$_[2]} @BUTTONS;
 
 my $TYPE_PRESS = "press";
 my $TYPE_RELEASE = "release";
+
+my %DBUS_ACTIONS = (
+  torchToggle => dbusSendCmd('com.jolla.settings.system.flashlight', '/<DEST_OBJ>',
+                   '<DEST>.toggleFlashlight'),
+);
 
 sub main(@){
   if(@_ == 1 and $_[0] =~ /^(-h|--help)$/){
@@ -287,7 +292,9 @@ sub parseConfigFileActions($){
     close FH;
   }
 
-  my $actionRe = "(?:cmd\\(.*\\)|torchToggle)";
+  my $dbusActionRe = join '|', sort keys %DBUS_ACTIONS;
+
+  my $actionRe = "(?:cmd\\(.*\\)|$dbusActionRe)";
 
   my @actions;
 
@@ -444,13 +451,8 @@ sub checkCondition($){
 
 sub getActionCommand($){
   my ($actionStr) = @_;
-  if($actionStr =~ /^(torchToggle)$/){
-    return ""
-      . "dbus-send --print-reply"
-      . " --dest=com.jolla.settings.system.flashlight"
-      . " /com/jolla/settings/system/flashlight"
-      . " com.jolla.settings.system.flashlight.toggleFlashlight"
-      ;
+  if(defined $DBUS_ACTIONS{$actionStr}){
+    return $DBUS_ACTIONS{$actionStr};
   }elsif($actionStr =~ /^cmd\((.*)\)$/){
     return $1;
   }else{
@@ -496,6 +498,24 @@ sub allEq(@){
     }
   }
   return 1;
+}
+
+#dbusSendCmd(DEST, OBJECT_PATH, FUNCTION, ARG, ARG ...)
+#generate the following command:
+#  dbus-send --print-reply --dest=DEST OBJECT_PATH FUNCTION ARG ARG ...
+#replace variables in that command as follows:
+#  <DEST>     => DEST
+#  <DEST_OBJ> => DEST with all '.'s replace with '/'s
+sub dbusSendCmd($$$@){
+  my ($dest, $objectPath, $function, @args) = @_;
+  my $destObj = $dest;
+  $destObj =~ s/\./\//g;
+  my $millis = nowMillis();
+  my $cmd = "dbus-send --print-reply --dest=$dest $objectPath $function @args";
+  $cmd =~ s/<DEST_OBJ>/$destObj/g;
+  $cmd =~ s/<DEST>/$dest/g;
+  $cmd =~ s/<MILLIS>/$millis/g;
+  return $cmd;
 }
 
 sub nowMillis(){
