@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+use IO::Select;
 use Time::HiRes qw(time);
 
 my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
@@ -137,6 +138,10 @@ sub main(@){
   my @pattern;
   my $lastButtonMillis = nowMillis();
   open $inputDevFH, "< $INPUT_DEV";
+
+  my $select = IO::Select->new();
+  $select->add($inputDevFH);
+
   while(1){
     my ($buttonId, $value) = readButtonEvent($inputDevFH);
 
@@ -166,10 +171,12 @@ sub main(@){
 
     for my $action(@actions){
       if(checkAction($action, @pattern)){
-        my $command = getActionCommand $$action{action};
-        print "RUNNING $command\n";
-        system "$command &";
-        @pattern = ();
+        if(not $select->can_read($PTRN_MAX_MILLIS/1000.0)){
+          my $command = getActionCommand $$action{action};
+          print "RUNNING $command\n";
+          system "$command &";
+          @pattern = ();
+        }
       }
     }
   }
