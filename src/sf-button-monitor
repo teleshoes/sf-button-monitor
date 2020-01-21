@@ -300,6 +300,7 @@ sub parseConfigFileActions($){
 
   my @lines = split /[\n\r]+/, $contents;
   for my $line(@lines){
+    next if $line =~ /^\s*(#.*)?$/;
     if($line =~ /^\s*action\s*=\s*($actionRe),([^,]+),(\w+)$/){
       my ($action, $patternString, $condition) = ($1, $2, $3);
       my @pattern = parsePatternString($patternString);
