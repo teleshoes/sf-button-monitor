@@ -21,10 +21,12 @@ my $BUTTONS = {
 };
 
 sub main(@){
+  #auto-flush stdout
+  select(STDOUT);
+  $| = 1;
   open FH, "< /dev/input/by-path/platform-gpio_keys.105-event";
   my $byteStr;
   my @pattern;
-  my $stdOut = select();
   my $lastButtonMillis = nowMillis();
   while(1){
     read FH, $byteStr, 16;
@@ -36,7 +38,6 @@ sub main(@){
       my $elapsed = $now - $lastButtonMillis;
       $lastButtonMillis = $now;
       print "BUTTON: $$BUTTONS{$button} => $value (${elapsed}ms)\n";
-      $stdOut->flush();
 
       my $event = {
         button => $button,
@@ -96,7 +97,6 @@ sub removeAccidentalDoubleClicks(@){
     next if $$dupePress{elapsed} > $PTRN_ACCIDENTAL_DOUBLE_MILLIS;
 
     print "    ACCIDENTAL DOUBLE-CLICK DETECTED: $$initPress{button}\n";
-    select()->flush();
     $dupeIndexes{$i+1} = 1; #skip the initial release
     $dupeIndexes{$i+2} = 1; #skip the extra press
   }
@@ -134,7 +134,6 @@ sub formatPattern(@){
 sub checkAction(@){
   my @pattern = @_;
   print formatPattern(@pattern);
-  select()->flush();
 
   ###HACK
 
