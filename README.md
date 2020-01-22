@@ -17,9 +17,12 @@ the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program.  
+If not, see <http://www.gnu.org/licenses/>.
+
 ----------
 
+```
 Perform actions when Sailfish OS hardware buttons are pressed.
 
 Supports volume up/down and camera half/full keys,
@@ -96,3 +99,4 @@ e.g.:
        ch-press vd-press vd-release vd-press
        vu-press vu-release vu-press vu-release
        vd-release cf-press cf-release ch-release
+```
