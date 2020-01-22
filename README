@@ -1,5 +1,13 @@
 Sailfish Button Monitor
 
+| Device            | Status       |
+| ----------------- | ------------ |
+| Xperia X          | Working OOTB |
+| Xperia X Compact  | Working OOTB |
+| Xperia XA2        | Working OOTB |
+| FxTec Pro1        | Manul Tweak  |
+| (everything else) | ???          |
+
 ----------
 Copyright (c) 2020 Elliot Wolk
 
