@@ -77,11 +77,13 @@ my $usage = "Usage:
                   writeEmail:  open app to write email
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
-  CONDITION = always | screenLocked | screenUnlocked | app(CMD_REGEX)
+  CONDITION = always | screenLocked | screenUnlocked
+              | home | app(CMD_REGEX)
                 when to allow the command to run
                   always: always
                   screenLocked: when display is off and screen is locked
                   screenUnlocked: when display is on and screen is unlocked
+                  home: when screenUnocked and there is no topmost window
                   app: when cmd of topmost window process matches CMD_REGEX
   CMD_REGEX = <any-string>
                 regular expression used to match process cmd returned by ps
@@ -335,7 +337,7 @@ sub parseConfigFileActions($){
         pattern => [@pattern],
         condition => $condition,
       };
-      if($condition !~ /^(always|screenLocked|screenUnlocked|app\(.*\))$/i){
+      if($condition !~ /^(always|screenLocked|screenUnlocked|home|app\(.*\))$/i){
         die "invalid condition: $condition\n";
       }
     }else{
@@ -473,6 +475,14 @@ sub checkCondition($){
     return isScreenLocked() ? 1 :0;
   }elsif($condition =~ /^(screenUnlocked)$/i){
     return isScreenLocked() ? 0 : 1;
+  }elsif($condition =~ /^(home)$/i){
+    return 0 if isScreenLocked();
+    my $pid = getActiveWindowPid();
+    if(defined $pid){
+      return 0; #some other window is active
+    }else{
+      return 1;
+    }
   }elsif($condition =~ /^app\((.*)\)$/i){
     my $cmdRegex = $1;
     my $winCmd = getActiveWindowCmd();
