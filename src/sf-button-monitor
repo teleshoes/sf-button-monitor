@@ -28,6 +28,8 @@ sub getActionCommand($);
 sub isScreenLocked();
 sub allEq(@);
 sub dbusSendCmd($$$@);
+sub getActiveWindowCmd();
+sub getActiveWindowPid();
 sub nowMillis();
 
 my $usage = "Usage:
@@ -75,14 +77,17 @@ my $usage = "Usage:
                   writeEmail:  open app to write email
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
-  CONDITION = always | screenLocked | screenUnlocked
+  CONDITION = always | screenLocked | screenUnlocked | app(CMD_REGEX)
                 when to allow the command to run
                   always: always
                   screenLocked: when display is off and screen is locked
                   screenUnlocked: when display is on and screen is unlocked
+                  app: when cmd of topmost window process matches CMD_REGEX
+  CMD_REGEX = <any-string>
+                regular expression used to match process cmd returned by ps
 
   BTN_PTRN  = <EVENT> | <EVENT> <BTN_PTRN>
-               a full pattern string containing button press/releases
+                a full pattern string containing button press/releases
   EVENT     = <PRESS> | <RELEASE> | <CLICK> | <GROUP>
                 a button press and/or release
   PRESS     = <BTN>-press
@@ -322,7 +327,7 @@ sub parseConfigFileActions($){
   my @lines = split /[\n\r]+/, $contents;
   for my $line(@lines){
     next if $line =~ /^\s*(#.*)?$/;
-    if($line =~ /^\s*action\s*=\s*($actionRe),([^,]+),(\w+)$/){
+    if($line =~ /^\s*action\s*=\s*($actionRe),([^,]+),(\w+(?:\(.*\))?)$/){
       my ($action, $patternString, $condition) = ($1, $2, $3);
       my @pattern = parsePatternString($patternString);
       push @actions, {
@@ -330,7 +335,7 @@ sub parseConfigFileActions($){
         pattern => [@pattern],
         condition => $condition,
       };
-      if($condition !~ /^(always|screenLocked|screenUnlocked)$/i){
+      if($condition !~ /^(always|screenLocked|screenUnlocked|app\(.*\))$/i){
         die "invalid condition: $condition\n";
       }
     }else{
@@ -462,12 +467,18 @@ sub checkAction($@){
 sub checkCondition($){
   my ($condition) = @_;
 
-  if($condition =~ /always/i){
+  if($condition =~ /^(always)$/i){
     return 1;
-  }elsif($condition =~ /screenLocked/i){
+  }elsif($condition =~ /^(screenLocked)$/i){
     return isScreenLocked() ? 1 :0;
-  }elsif($condition =~ /screenUnlocked/i){
+  }elsif($condition =~ /^(screenUnlocked)$/i){
     return isScreenLocked() ? 0 : 1;
+  }elsif($condition =~ /^app\((.*)\)$/i){
+    my $cmdRegex = $1;
+    my $winCmd = getActiveWindowCmd();
+    return 0 if not defined $winCmd;
+    print "CHECKING: $winCmd =~ /$cmdRegex/\n" if defined $winCmd;
+    return $winCmd =~ /$cmdRegex/ ? 1 : 0;
   }else{
     die "ERROR: invalid condition $condition\n";
   }
@@ -540,6 +551,29 @@ sub dbusSendCmd($$$@){
   $cmd =~ s/<DEST>/$dest/g;
   $cmd =~ s/<MILLIS>/$millis/g;
   return $cmd;
+}
+
+sub getActiveWindowCmd(){
+  my $pid = getActiveWindowPid();
+  return undef if not defined $pid;
+  my $cmd = `ps --no-headers -o cmd -q $pid 2>/dev/null`;
+  chomp $cmd;
+  if($cmd =~ /\w/ and $cmd !~ /[\r\n]/){
+    return $cmd;
+  }
+}
+
+sub getActiveWindowPid(){
+  my @cmd = qw(dbus-send --print-reply --system
+    --dest=org.nemomobile.lipstick /
+    org.nemomobile.compositor.privateTopmostWindowProcessId
+  );
+  my $res = join '', `@cmd 2>/dev/null`;
+  if($res =~ /int32 (\d+)/){
+    return $1;
+  }else{
+    return undef;
+  }
 }
 
 sub nowMillis(){
