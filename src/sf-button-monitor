@@ -80,13 +80,17 @@ my $usage = "Usage:
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
   CONDITION = always | screenLocked | screenUnlocked
-              | app(CMD_REGEX) | home | android
+              | app(CMD_REGEX) | home | noapp | anyapp | android
                 when to allow the command to run
                   always:         always
                   screenLocked:   when display is off and screen is locked
                   screenUnlocked: when display is on and screen is unlocked
                   app:            when cmd of topmost window process matches CMD_REGEX
                   home:           when screenUnlocked and there is no topmost window
+                  noapp:          when there is no topmost window
+                                    same as: 'home' or 'screenLocked'
+                  anyapp:         when there is any topmost window
+                                    same as: 'app()'
                   android:        when topmost window is aliendalvik
                                     same as: 'app(^system_server\$)'
   CMD_REGEX = <any-string>
@@ -332,7 +336,7 @@ sub parseConfigFileActions($){
 
   my $condRe = join "|", (
     "always", "screenLocked", "screenUnlocked",
-    "app\\(.*\\)", "home", "android",
+    "app\\(.*\\)", "home", "noapp", "anyapp", "android",
   );
 
   my @lines = split /[\n\r]+/, $contents;
@@ -490,6 +494,10 @@ sub checkCondition($){
   }elsif($condition =~ /^(home)$/i){
     return 0 if isScreenLocked();
     return isAnyWindowActive() ? 0 : 1;
+  }elsif($condition =~ /^(noapp)$/i){
+    return isAnyWindowActive() ? 0 : 1;
+  }elsif($condition =~ /^(anyapp)$/i){
+    return isAnyWindowActive() ? 1 : 0;
   }elsif($condition =~ /^(android)$/i){
     return isWindowActive('^system_server$');
   }else{
