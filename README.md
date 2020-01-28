@@ -51,21 +51,41 @@ actions are recorded in /home/wolke/.config/sf-button-monitor.conf
   one per line, formatted like:
   action=ACTION,PTRN,CONDITION
 
-ACTION    = cmd(<CMD>) | torchToggle
+ACTION    = cmd(<CMD>) | torch | screenshot
+            | reboot | shutdown | openCamera | selfie
+            | newAlarm | newNote | writeEmail
               action to perform
-                cmd: run the shell command in parentheses
-                torchToggle: runs `dbus-send` for method:
-                       com.jolla.settings.system.flashlight.toggleFlashlight
+                cmd:         run shell command <CMD>
+                torch:       toggle flashlight
+                screenshot:  take a screenshot in ~/screenshot-<MILLIS>.png
+                reboot:      reboot phone
+                shutdown:    shutdown phone
+                openCamera:  open the camera app (in previous mode)
+                selfie:      open the camera app in selfie mode
+                newAlarm:    open app to add alarm
+                newNote:     open app to add note
+                writeEmail:  open app to write email
 CMD       = <any-string>
               any shell command: EXEC ARG ARG...
 CONDITION = always | screenLocked | screenUnlocked
+            | app(CMD_REGEX) | home | noapp | anyapp | android
               when to allow the command to run
-                always: always
-                screenLocked: when display is off and screen is locked
+                always:         always
+                screenLocked:   when display is off and screen is locked
                 screenUnlocked: when display is on and screen is unlocked
+                app:            when cmd of topmost window process matches CMD_REGEX
+                home:           when screenUnlocked and there is no topmost window
+                noapp:          when there is no topmost window
+                                  same as: 'home' or 'screenLocked'
+                anyapp:         when there is any topmost window
+                                  same as: 'app()'
+                android:        when topmost window is aliendalvik
+                                  same as: 'app(^system_server$)'
+CMD_REGEX = <any-string>
+              regular expression used to match process cmd returned by ps
 
 BTN_PTRN  = <EVENT> | <EVENT> <BTN_PTRN>
-             a full pattern string containing button press/releases
+              a full pattern string containing button press/releases
 EVENT     = <PRESS> | <RELEASE> | <CLICK> | <GROUP>
               a button press and/or release
 PRESS     = <BTN>-press
