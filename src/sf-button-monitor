@@ -6,6 +6,7 @@ use Time::HiRes qw(time);
 
 my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
+my $LAST_WINDOW_TITLE_FILE = "/tmp/lipstick-window-title";
 
 my $DEFAULT_CONFIG_CONTENTS = ''
   . "action=torch,vd vd,screenLocked\n"
@@ -81,6 +82,7 @@ my $usage = "Usage:
                 any shell command: EXEC ARG ARG...
   CONDITION = always | screenLocked | screenUnlocked
               | app(CMD_REGEX) | home | noapp | anyapp | android
+              | window(TITLE_REGEX)
                 when to allow the command to run
                   always:         always
                   screenLocked:   when display is off and screen is locked
@@ -93,6 +95,12 @@ my $usage = "Usage:
                                     same as: 'app()'
                   android:        when topmost window is aliendalvik
                                     same as: 'app(^system_server\$)'
+                  window:         when screen is unlocked,
+                                    and contents of $LAST_WINDOW_TITLE_FILE match TITLE_REGEX
+                                    WARNING:
+                                      that file is not set by this script
+                                      you must manually alter lipstick to make window()
+                                      do anything interesting at all
   CMD_REGEX = <any-string>
                 regular expression used to match process cmd returned by ps
 
@@ -336,7 +344,7 @@ sub parseConfigFileActions($){
 
   my $condRe = join "|", (
     "always", "screenLocked", "screenUnlocked",
-    "app\\(.*\\)", "home", "noapp", "anyapp", "android",
+    "app\\(.*\\)", "home", "noapp", "anyapp", "android", "window\\(.*\\)",
   );
 
   my @lines = split /[\n\r]+/, $contents;
@@ -500,6 +508,10 @@ sub checkCondition($){
     return isAnyWindowActive() ? 1 : 0;
   }elsif($condition =~ /^(android)$/i){
     return isWindowActive('^system_server$');
+  }elsif($condition =~ /^window\((.*)\)$/i){
+    my $titleRegex = $1;
+    return 0 if isScreenLocked();
+    return lastWindowTitleMatches($titleRegex);
   }else{
     die "ERROR: invalid condition $condition\n";
   }
@@ -595,6 +607,17 @@ sub getActiveWindowPid(){
   }else{
     return undef;
   }
+}
+
+sub lastWindowTitleMatches($){
+  my ($titleRegex) = @_;
+  if(-f $LAST_WINDOW_TITLE_FILE){
+    my $lastWindowTitle = `cat $LAST_WINDOW_TITLE_FILE 2>/dev/null`;
+    if($lastWindowTitle =~ /$titleRegex/){
+      return 1;
+    }
+  }
+  return 0;
 }
 
 sub isWindowActive($){
