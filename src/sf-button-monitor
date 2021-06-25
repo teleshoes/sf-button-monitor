@@ -110,7 +110,7 @@ my $usage = "Usage:
                 a button press and/or release
   PRESS     = <BTN>-press
                 pressing button named <BTN>
-  RELEASE   = <BTN>-press
+  RELEASE   = <BTN>-release
                 releasing button named <BTN>
   CLICK     = <BTN>
                 same as: <BTN>-press <BTN>-release
