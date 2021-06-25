@@ -15,6 +15,9 @@ my $DEFAULT_CONFIG_CONTENTS = ''
 my $PTRN_MAX_MILLIS = 350;
 my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 
+my $PTRN_MATCH_ANYWHERE = "anywhere";
+my $PTRN_MATCH_END_ONLY = "end-only";
+
 sub readButtonEvent($);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
@@ -23,7 +26,7 @@ sub sortActionsLongestFirst(@);
 sub formatPattern(@);
 sub condensePattern(@);
 sub parsePatternString($);
-sub checkAction($@);
+sub checkAction($$@);
 sub checkCondition($);
 sub getActionCommand($);
 sub isScreenLocked();
@@ -64,11 +67,14 @@ my $usage = "Usage:
     one per line, formatted like:
     action=ACTION,PTRN,CONDITION
 
-  ACTION    = cmd(<CMD>) | torch | screenshot
+  ACTION    = cmd(<CMD>) | repeat(<REPEAT_MS>,<CMD>) | torch | screenshot
               | reboot | shutdown | openCamera | selfie
               | newAlarm | newNote | writeEmail
                 action to perform
                   cmd:         run shell command <CMD>
+                  repeat:      run shell command <CMD> every <REPEAT_MILLIS>ms,
+                               until another button <EVENT> happens
+                               (if pattern ends in <BTN>-press, <BTN>-release will end it)
                   torch:       toggle flashlight
                   screenshot:  take a screenshot in ~/screenshot-<MILLIS>.png
                   reboot:      reboot phone
@@ -80,6 +86,7 @@ my $usage = "Usage:
                   writeEmail:  open app to write email
   CMD       = <any-string>
                 any shell command: EXEC ARG ARG...
+  REPEAT_MS = milliseconds to wait for <EVENT>s before re-running command
   CONDITION = always | screenLocked | screenUnlocked
               | app(CMD_REGEX) | home | noapp | anyapp | android
               | window(TITLE_REGEX)
@@ -221,11 +228,27 @@ sub main(@){
     @pattern = removeAccidentalDoubleClicks(@pattern);
 
     for my $action(@actions){
-      if(checkAction($action, @pattern) and checkCondition($$action{condition})){
+      my $patternMatches = checkAction($PTRN_MATCH_ANYWHERE, $action, @pattern);
+      if($patternMatches and checkCondition($$action{condition})){
         if(not $select->can_read($PTRN_MAX_MILLIS/1000.0)){
           my $command = getActionCommand $$action{action};
           print "RUNNING $command\n";
           system "$command &";
+
+          if($$action{action} =~ /^repeat\((\d+)/){
+            my $repeatMillis = $1;
+            my $noButtonsSince = checkAction($PTRN_MATCH_END_ONLY, $action, @pattern);
+            while($noButtonsSince){
+              #wait repeatMillis ms for any more button presses/releases
+              if(not $select->can_read($repeatMillis/1000.0)){
+                print "RE-RUNNING $command\n";
+                system "$command &";
+              }else{
+                $noButtonsSince = 0;
+              }
+            }
+          }
+
           @pattern = ();
         }
       }
@@ -338,7 +361,7 @@ sub parseConfigFileActions($){
 
   my $dbusActionRe = join '|', sort keys %DBUS_ACTIONS;
 
-  my $actionRe = "(?:cmd\\(.*\\)|$dbusActionRe)";
+  my $actionRe = "(?:cmd\\(.*\\)|repeat\\(\\d+,.*\\)|$dbusActionRe)";
 
   my @actions;
 
@@ -470,8 +493,8 @@ sub parsePatternString($){
   }
 }
 
-sub checkAction($@){
-  my ($action, @pattern) = @_;
+sub checkAction($$@){
+  my ($patternMatchMode, $action, @pattern) = @_;
 
   my @actionPtrn = @{$$action{pattern}};
   my $actionPtrnRe = join ".*", @actionPtrn;
@@ -479,6 +502,14 @@ sub checkAction($@){
   my $patternStr = join " ", map {
     "$BTN_SHORTNAMES{$$_{buttonId}}-$$_{type}"
   } @pattern;
+
+  if($patternMatchMode eq $PTRN_MATCH_ANYWHERE){
+    $actionPtrnRe = "$actionPtrnRe";
+  }elsif($patternMatchMode eq $PTRN_MATCH_END_ONLY){
+    $actionPtrnRe = "$actionPtrnRe\$";
+  }else{
+    die "ERROR: unknown pattern match mode $patternMatchMode\n";
+  }
 
   if($patternStr =~ /$actionPtrnRe/){
     return 1;
@@ -522,6 +553,8 @@ sub getActionCommand($){
   if(defined $DBUS_ACTIONS{$actionStr}){
     return $DBUS_ACTIONS{$actionStr};
   }elsif($actionStr =~ /^cmd\((.*)\)$/){
+    return $1;
+  }elsif($actionStr =~ /^repeat\((?:\d+),(.*)\)$/){
     return $1;
   }else{
     die "invalid action: $actionStr\n";
