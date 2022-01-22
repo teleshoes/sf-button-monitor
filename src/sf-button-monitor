@@ -4,7 +4,7 @@ use warnings;
 use IO::Select;
 use Time::HiRes qw(time);
 
-my $INPUT_DEV = "/dev/input/by-path/platform-gpio_keys.105-event";
+my $INPUT_DEV_GLOB = "/dev/input/by-path/*gpio_keys*";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
 my $LAST_WINDOW_TITLE_FILE = "/tmp/lipstick-window-title";
 
@@ -56,7 +56,7 @@ my $usage = "Usage:
     display this message
 
   $0
-    -listen to $INPUT_DEV
+    -listen to $INPUT_DEV_GLOB
     -parse bytes into button press/release events
     -split sequences of events into patterns
     -read actions and patterns from $CONFIG_FILE
@@ -185,6 +185,14 @@ sub main(@){
     die $usage;
   }
 
+  my $inputDev;
+  my @inputDevs = glob($INPUT_DEV_GLOB);
+  if(@inputDevs >= 1 and -e $inputDevs[0]){
+    $inputDev = $inputDevs[0];
+  }else{
+    die "ERROR: could not find $INPUT_DEV_GLOB\n";
+  }
+
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
@@ -195,7 +203,7 @@ sub main(@){
   my $inputDevFH;
   my @pattern;
   my $lastButtonMillis = nowMillis();
-  open $inputDevFH, "< $INPUT_DEV";
+  open $inputDevFH, "< $inputDev";
 
   my $select = IO::Select->new();
   $select->add($inputDevFH);
