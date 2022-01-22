@@ -8,6 +8,12 @@ my $INPUT_DEV_GLOB = "/dev/input/by-path/*gpio_keys*";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
 my $LAST_WINDOW_TITLE_FILE = "/tmp/lipstick-window-title";
 
+my $DEFAULT_MODEL = "F1521";
+my $DEVICE_BYTE_OFFSETS = {
+  #MODEL => [EVENT_BYTE_SIZE, BTN_ID_BYTE_INDEX, BTN_VAL_BYTE_INDEX]
+  $DEFAULT_MODEL => [16, 10, 12],
+};
+
 my $DEFAULT_CONFIG_CONTENTS = ''
   . "action=torch,vd vd,screenLocked\n"
   ;
@@ -18,7 +24,8 @@ my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 my $PTRN_MATCH_ANYWHERE = "anywhere";
 my $PTRN_MATCH_END_ONLY = "end-only";
 
-sub readButtonEvent($);
+sub getDeviceByteOffsets();
+sub readButtonEvent($$$$);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub parseConfigFileActions($);
@@ -193,6 +200,8 @@ sub main(@){
     die "ERROR: could not find $INPUT_DEV_GLOB\n";
   }
 
+  my ($eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = getDeviceByteOffsets();
+
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
@@ -209,7 +218,12 @@ sub main(@){
   $select->add($inputDevFH);
 
   while(1){
-    my ($buttonId, $value) = readButtonEvent($inputDevFH);
+    my ($buttonId, $value) = readButtonEvent(
+      $inputDevFH,
+      $eventByteSize,
+      $buttonIdByteIndex,
+      $buttonValByteIndex
+    );
 
     my $now = nowMillis();
     my $elapsedMillis = $now - $lastButtonMillis;
@@ -264,15 +278,27 @@ sub main(@){
   }
 }
 
+sub getDeviceByteOffsets(){
+  my $model = `ssu mo 2>/dev/null`;
+  chomp $model;
+  $model =~ s/^Device model is: //;
+  $model = uc $model;
+  if(defined $$DEVICE_BYTE_OFFSETS{$model}){
+    return @{$$DEVICE_BYTE_OFFSETS{$model}};
+  }else{
+    return @{$$DEVICE_BYTE_OFFSETS{$DEFAULT_MODEL}};
+  }
+}
+
 #blocks until a valid button press/release event and then returns it
-sub readButtonEvent($){
-  my ($inputDevFH) = @_;
+sub readButtonEvent($$$$){
+  my ($inputDevFH, $eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = @_;
   my $byteStr;
   while(1){
-    read $inputDevFH, $byteStr, 16;
+    read $inputDevFH, $byteStr, $eventByteSize;
     my @bytesDec = map {ord $_} split //, $byteStr;
-    my $buttonId = $bytesDec[10];
-    my $value = $bytesDec[12];
+    my $buttonId = $bytesDec[$buttonIdByteIndex];
+    my $value = $bytesDec[$buttonValByteIndex];
     if(defined $OK_BUTTON_IDS{$buttonId}){
       return ($buttonId, $value);
     }
