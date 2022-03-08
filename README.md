@@ -5,6 +5,7 @@ Sailfish Button Monitor
 | Xperia X          | Working OOTB |
 | Xperia X Compact  | Working OOTB |
 | Xperia XA2        | Working OOTB |
+| Xperia XZ2 Compact| Working OOTB |
 | FxTec Pro1        | Manul Tweak  |
 | (everything else) | ???          |
 
