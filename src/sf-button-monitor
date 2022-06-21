@@ -175,6 +175,8 @@ my @BUTTONS = (
   [qw(16  CAM_HALF ch)],
   [qw(254 CAM_FULL cf)],
   [qw(116 POWER    pw)],
+
+  [qw(201 CAM_FULL cf)], # google-assist button on Xperia 10 III => CAM_FULL
 );
 my %OK_BUTTON_IDS = map {$$_[0] => 1} @BUTTONS;
 my %BTN_NAMES = map {$$_[0] => $$_[1]} @BUTTONS;
