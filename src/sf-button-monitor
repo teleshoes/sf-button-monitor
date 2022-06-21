@@ -4,7 +4,6 @@ use warnings;
 use IO::Select;
 use Time::HiRes qw(time);
 
-my $INPUT_DEV_GLOB = "/dev/input/by-path/*gpio_keys*";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
 my $LAST_WINDOW_TITLE_FILE = "/tmp/lipstick-window-title";
 
@@ -12,6 +11,21 @@ my $IS_64_BIT = `getconf LONG_BIT` =~ /^64$/ ? 1 : 0;
 my $EVENT_BYTE_SIZE =    $IS_64_BIT ? 48 : 32;
 my $BTN_ID_BYTE_INDEX =  $IS_64_BIT ? 18 : 10;
 my $BTN_VAL_BYTE_INDEX = $IS_64_BIT ? 20 : 12;
+
+my $MODEL_NAME = lc $1 if `ssu mo 2>/dev/null` =~ /^Device model is: (\w+)$/;
+my $DEFAULT_MODEL_NAME = $IS_64_BIT ? "xqbt52" : "f5121";
+
+my $INPUT_DEVICES_BY_MODEL_NAME = {
+  f5121  => ['/dev/input/event4'],
+  f5321  => ['/dev/input/event4'],
+  h3113  => ['/dev/input/event4'],
+  h8314  => ['/dev/input/event3'],
+  xqbt52 => ['/dev/input/event3'],
+};
+my $DEFAULT_INPUT_DEVICES = $$INPUT_DEVICES_BY_MODEL_NAME{$DEFAULT_MODEL_NAME};
+
+my $INPUT_DEVICES = $$INPUT_DEVICES_BY_MODEL_NAME{$MODEL_NAME};
+$INPUT_DEVICES = $DEFAULT_INPUT_DEVICES if not defined $INPUT_DEVICES;
 
 my $DEFAULT_CONFIG_CONTENTS = ''
   . "action=torch,vd vd,screenLocked\n"
@@ -62,7 +76,7 @@ my $usage = "Usage:
     display this message
 
   $0
-    -listen to $INPUT_DEV_GLOB
+    -listen to input devs: @$INPUT_DEVICES
     -parse bytes into button press/release events
     -split sequences of events into patterns
     -read actions and patterns from $CONFIG_FILE
@@ -191,14 +205,6 @@ sub main(@){
     die $usage;
   }
 
-  my $inputDev;
-  my @inputDevs = glob($INPUT_DEV_GLOB);
-  if(@inputDevs >= 1 and -e $inputDevs[0]){
-    $inputDev = $inputDevs[0];
-  }else{
-    die "ERROR: could not find $INPUT_DEV_GLOB\n";
-  }
-
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
@@ -206,13 +212,15 @@ sub main(@){
   my @actions = parseConfigFileActions($CONFIG_FILE);
   @actions = sortActionsLongestFirst @actions;
 
-  my $inputDevFH;
   my @pattern;
   my $lastButtonMillis = nowMillis();
-  open $inputDevFH, "< $inputDev";
 
   my $select = IO::Select->new();
-  $select->add($inputDevFH);
+  for my $dev(@$INPUT_DEVICES){
+    open my $inputDevFH, "< $dev"
+      or die "ERROR: could not read $dev\n$!\n";
+    $select->add($inputDevFH);
+  }
 
   while(1){
     my ($buttonId, $value) = readButtonEvent($select);
