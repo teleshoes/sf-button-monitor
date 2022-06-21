@@ -220,7 +220,7 @@ sub main(@){
 
   while(1){
     my ($buttonId, $value) = readButtonEvent(
-      $inputDevFH,
+      $select,
       $eventByteSize,
       $buttonIdByteIndex,
       $buttonValByteIndex
@@ -293,15 +293,19 @@ sub getDeviceByteOffsets(){
 
 #blocks until a valid button press/release event and then returns it
 sub readButtonEvent($$$$){
-  my ($inputDevFH, $eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = @_;
+  my ($select, $eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = @_;
   my $byteStr;
   while(1){
-    read $inputDevFH, $byteStr, $eventByteSize;
-    my @bytesDec = map {ord $_} split //, $byteStr;
-    my $buttonId = $bytesDec[$buttonIdByteIndex];
-    my $value = $bytesDec[$buttonValByteIndex];
-    if(defined $OK_BUTTON_IDS{$buttonId}){
-      return ($buttonId, $value);
+    my @readyFHs = $select->can_read(); #block forever
+    if(@readyFHs > 0){
+      my $inputDevFH = $readyFHs[0];
+      read $inputDevFH, $byteStr, $eventByteSize;
+      my @bytesDec = map {ord $_} split //, $byteStr;
+      my $buttonId = $bytesDec[$buttonIdByteIndex];
+      my $value = $bytesDec[$buttonValByteIndex];
+      if(defined $OK_BUTTON_IDS{$buttonId}){
+        return ($buttonId, $value);
+      }
     }
   }
 }
