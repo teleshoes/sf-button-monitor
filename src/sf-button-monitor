@@ -8,12 +8,10 @@ my $INPUT_DEV_GLOB = "/dev/input/by-path/*gpio_keys*";
 my $CONFIG_FILE = "$ENV{HOME}/.config/sf-button-monitor.conf";
 my $LAST_WINDOW_TITLE_FILE = "/tmp/lipstick-window-title";
 
-my $DEFAULT_MODEL = "F1521";
-my $DEVICE_BYTE_OFFSETS = {
-  #MODEL => [EVENT_BYTE_SIZE, BTN_ID_BYTE_INDEX, BTN_VAL_BYTE_INDEX]
-  $DEFAULT_MODEL => [32, 10, 12],
-  "H8314"        => [48, 18, 20],
-};
+my $IS_64_BIT = `getconf LONG_BIT` =~ /^64$/ ? 1 : 0;
+my $EVENT_BYTE_SIZE =    $IS_64_BIT ? 48 : 32;
+my $BTN_ID_BYTE_INDEX =  $IS_64_BIT ? 18 : 10;
+my $BTN_VAL_BYTE_INDEX = $IS_64_BIT ? 20 : 12;
 
 my $DEFAULT_CONFIG_CONTENTS = ''
   . "action=torch,vd vd,screenLocked\n"
@@ -25,8 +23,8 @@ my $PTRN_ACCIDENTAL_DOUBLE_MILLIS = 10;
 my $PTRN_MATCH_ANYWHERE = "anywhere";
 my $PTRN_MATCH_END_ONLY = "end-only";
 
-sub getDeviceByteOffsets();
-sub readButtonEvent($$$$);
+sub is64Bit();
+sub readButtonEvent($);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub parseConfigFileActions($);
@@ -201,8 +199,6 @@ sub main(@){
     die "ERROR: could not find $INPUT_DEV_GLOB\n";
   }
 
-  my ($eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = getDeviceByteOffsets();
-
   #auto-flush stdout
   select(STDOUT);
   $| = 1;
@@ -219,12 +215,7 @@ sub main(@){
   $select->add($inputDevFH);
 
   while(1){
-    my ($buttonId, $value) = readButtonEvent(
-      $select,
-      $eventByteSize,
-      $buttonIdByteIndex,
-      $buttonValByteIndex
-    );
+    my ($buttonId, $value) = readButtonEvent($select);
 
     my $now = nowMillis();
     my $elapsedMillis = $now - $lastButtonMillis;
@@ -279,30 +270,27 @@ sub main(@){
   }
 }
 
-sub getDeviceByteOffsets(){
-  my $model = `ssu mo 2>/dev/null`;
-  chomp $model;
-  $model =~ s/^Device model is: //;
-  $model = uc $model;
-  if(defined $$DEVICE_BYTE_OFFSETS{$model}){
-    return @{$$DEVICE_BYTE_OFFSETS{$model}};
+sub is64Bit(){
+  my $val = `getconf LONG_BIT`;
+  if($val =~ /64/){
+    return 1;
   }else{
-    return @{$$DEVICE_BYTE_OFFSETS{$DEFAULT_MODEL}};
+    return 0;
   }
 }
 
 #blocks until a valid button press/release event and then returns it
-sub readButtonEvent($$$$){
-  my ($select, $eventByteSize, $buttonIdByteIndex, $buttonValByteIndex) = @_;
+sub readButtonEvent($){
+  my ($select) = @_;
   my $byteStr;
   while(1){
     my @readyFHs = $select->can_read(); #block forever
     if(@readyFHs > 0){
       my $inputDevFH = $readyFHs[0];
-      read $inputDevFH, $byteStr, $eventByteSize;
+      read $inputDevFH, $byteStr, $EVENT_BYTE_SIZE;
       my @bytesDec = map {ord $_} split //, $byteStr;
-      my $buttonId = $bytesDec[$buttonIdByteIndex];
-      my $value = $bytesDec[$buttonValByteIndex];
+      my $buttonId = $bytesDec[$BTN_ID_BYTE_INDEX];
+      my $value = $bytesDec[$BTN_VAL_BYTE_INDEX];
       if(defined $OK_BUTTON_IDS{$buttonId}){
         return ($buttonId, $value);
       }
