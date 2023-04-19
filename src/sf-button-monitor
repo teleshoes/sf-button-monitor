@@ -484,7 +484,7 @@ sub condensePattern(@){
   if($$event{type} eq $TYPE_PRESS){
     for(my $i=0; $i<@pattern; $i++){
       my $btnRelEvent = $pattern[$i];
-      next if $$btnRelEvent{buttonId} != $$event{buttonId};
+      next if $$btnRelEvent{buttonId} ne $$event{buttonId};
       next if $$btnRelEvent{type} ne $TYPE_RELEASE;
 
       my @group = @pattern[0..$i-1];
