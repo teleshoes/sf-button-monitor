@@ -178,6 +178,11 @@ my @BUTTONS = (
   [qw(116 POWER    pw)],
 
   [qw(201 CAM_FULL cf)], # google-assist button on Xperia 10 III => CAM_FULL
+
+  [qw(mpris-play   MPRIS_PLAY  play)],
+  [qw(mpris-pause  MPRIS_PAUSE pause)],
+  [qw(mpris-next   MPRIS_NEXT  next)],
+  [qw(mpris-prev   MPRIS_PREV  prev)],
 );
 my %OK_BUTTON_IDS = map {$$_[0] => 1} @BUTTONS;
 my %BTN_NAMES = map {$$_[0] => $$_[1]} @BUTTONS;
@@ -229,6 +234,13 @@ sub main(@){
       or die "ERROR: could not read $dev\n$!\n";
     $select->add($inputDevFH);
     $$fhTypeMap{$inputDevFH} = "input";
+  }
+
+  if(open my $dbusMonFH, "-|", "dbus-monitor", "interface=org.mpris.MediaPlayer2.Player"){
+    $select->add($dbusMonFH);
+    $$fhTypeMap{$dbusMonFH} = "dbus-monitor";
+  }else{
+    warn "WARNING: could not start dbus-monitor\n$!\n";
   }
 
   while(1){
@@ -327,6 +339,12 @@ sub readButtonEvent($$){
         my $eventType = $value ? $TYPE_PRESS : $TYPE_RELEASE;
         if(defined $OK_BUTTON_IDS{$buttonId}){
           return ($buttonId, $eventType);
+        }
+      }elsif($type eq "dbus-monitor"){
+        my $line = <$inputDevFH>;
+        if($line =~ /member=(Play|Pause|Next|Previous)/){
+          my $btnId = "mpris-" . lc $1;
+          return ($btnId, $TYPE_PRESS_AND_RELEASE);
         }
       }
     }
