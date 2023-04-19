@@ -185,6 +185,7 @@ my %BTN_SHORTNAMES = map {$$_[0] => $$_[2]} @BUTTONS;
 
 my $TYPE_PRESS = "press";
 my $TYPE_RELEASE = "release";
+my $TYPE_PRESS_AND_RELEASE = "press-and-release";
 
 my %DBUS_ACTIONS = (
   torch      => dbusSendCmd('com.jolla.settings.system.flashlight', '/<DEST_OBJ>',
@@ -237,21 +238,37 @@ sub main(@){
     my $elapsedMillis = $now - $lastButtonMillis;
     $lastButtonMillis = $now;
 
-    my $event = {
-      buttonId      => $buttonId,
-      type          => $eventType,
-      elapsedMillis => $elapsedMillis,
-    };
+    my @events;
+    if($eventType =~ /^($TYPE_PRESS_AND_RELEASE)$/){
+      push @events, {
+        buttonId      => $buttonId,
+        type          => $TYPE_PRESS,
+        elapsedMillis => $elapsedMillis,
+      };
+      push @events, {
+        buttonId      => $buttonId,
+        type          => $TYPE_RELEASE,
+        elapsedMillis => $elapsedMillis,
+      };
+    }else{
+      push @events, {
+        buttonId      => $buttonId,
+        type          => $eventType,
+        elapsedMillis => $elapsedMillis,
+      };
+    }
 
-    push @pattern, $event;
-    @pattern = trimPattern @pattern;
+    for my $event(@events){
+      push @pattern, $event;
+      @pattern = trimPattern @pattern;
 
-    printf "EVENT: %8s => %-7s  %14dms  (%s)\n",
-      $BTN_NAMES{$$event{buttonId}},
-      $$event{type},
-      $$event{elapsedMillis},
-      formatPattern(@pattern),
-      ;
+      printf "EVENT: %8s => %-7s  %14dms  (%s)\n",
+        $BTN_NAMES{$$event{buttonId}},
+        $$event{type},
+        $$event{elapsedMillis},
+        formatPattern(@pattern),
+        ;
+    }
 
     @pattern = removeAccidentalDoubleClicks(@pattern);
 
