@@ -228,17 +228,15 @@ sub main(@){
   }
 
   while(1){
-    my ($buttonId, $value) = readButtonEvent($select);
+    my ($buttonId, $eventType) = readButtonEvent($select, $fhTypeMap);
 
     my $now = nowMillis();
     my $elapsedMillis = $now - $lastButtonMillis;
     $lastButtonMillis = $now;
 
-    my $type = $value ? $TYPE_PRESS : $TYPE_RELEASE;
-
     my $event = {
       buttonId      => $buttonId,
-      type          => $type,
+      type          => $eventType,
       elapsedMillis => $elapsedMillis,
     };
 
@@ -304,8 +302,9 @@ sub readButtonEvent($){
       my @bytesDec = map {ord $_} split //, $byteStr;
       my $buttonId = $bytesDec[$BTN_ID_BYTE_INDEX];
       my $value = $bytesDec[$BTN_VAL_BYTE_INDEX];
+      my $eventType = $value ? $TYPE_PRESS : $TYPE_RELEASE;
       if(defined $OK_BUTTON_IDS{$buttonId}){
-        return ($buttonId, $value);
+        return ($buttonId, $eventType);
       }
     }
   }
