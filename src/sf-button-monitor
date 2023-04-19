@@ -65,6 +65,10 @@ my $usage = "Usage:
   Supports volume up/down and camera half/full keys,
     when screen is locked or unlocked.
 
+  Supports MPRIS bluetooth buttons, via dbus-monitor.
+    May require running a dummy MPRIS player.
+    e.g.: pip install mpris-fakeplayer
+
   Can run arbitrary shell commands, or a few built-in commands.
 
   Works best with automatic display-on disabled (requires mcetool).
