@@ -39,7 +39,7 @@ my $PTRN_MATCH_ANYWHERE = "anywhere";
 my $PTRN_MATCH_END_ONLY = "end-only";
 
 sub is64Bit();
-sub readButtonEvent($);
+sub readButtonEvent($$);
 sub trimPattern(@);
 sub removeAccidentalDoubleClicks(@);
 sub parseConfigFileActions($);
@@ -220,11 +220,14 @@ sub main(@){
   my @pattern;
   my $lastButtonMillis = nowMillis();
 
+  my $fhTypeMap = {};
+
   my $select = IO::Select->new();
   for my $dev(@$INPUT_DEVICES){
     open my $inputDevFH, "< $dev"
       or die "ERROR: could not read $dev\n$!\n";
     $select->add($inputDevFH);
+    $$fhTypeMap{$inputDevFH} = "input";
   }
 
   while(1){
@@ -291,20 +294,23 @@ sub is64Bit(){
 }
 
 #blocks until a valid button press/release event and then returns it
-sub readButtonEvent($){
-  my ($select) = @_;
+sub readButtonEvent($$){
+  my ($select, $fhTypeMap) = @_;
   my $byteStr;
   while(1){
     my @readyFHs = $select->can_read(); #block forever
     if(@readyFHs > 0){
       my $inputDevFH = $readyFHs[0];
-      read $inputDevFH, $byteStr, $EVENT_BYTE_SIZE;
-      my @bytesDec = map {ord $_} split //, $byteStr;
-      my $buttonId = $bytesDec[$BTN_ID_BYTE_INDEX];
-      my $value = $bytesDec[$BTN_VAL_BYTE_INDEX];
-      my $eventType = $value ? $TYPE_PRESS : $TYPE_RELEASE;
-      if(defined $OK_BUTTON_IDS{$buttonId}){
-        return ($buttonId, $eventType);
+      my $type = $$fhTypeMap{$inputDevFH};
+      if($type eq "input"){
+        read $inputDevFH, $byteStr, $EVENT_BYTE_SIZE;
+        my @bytesDec = map {ord $_} split //, $byteStr;
+        my $buttonId = $bytesDec[$BTN_ID_BYTE_INDEX];
+        my $value = $bytesDec[$BTN_VAL_BYTE_INDEX];
+        my $eventType = $value ? $TYPE_PRESS : $TYPE_RELEASE;
+        if(defined $OK_BUTTON_IDS{$buttonId}){
+          return ($buttonId, $eventType);
+        }
       }
     }
   }
