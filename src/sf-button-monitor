@@ -152,7 +152,7 @@ my $usage = "Usage:
                 same as: <BTN>-press <BTN>-release
   GROUP     = <BTN>() | <BTN>( <BTN_PTRN> )
                 same as: <BTN>-press <BTN_PTRN> <BTN>-release
-  BTN       = vu | vd | ch | cf | pw | pd | pu
+  BTN       = vu | vd | ch | cf | pw | pd | pu | play | pause | next | prev
                 the name of a physical hardware button
                   vu: volume up
                   vd: volume down
@@ -161,6 +161,11 @@ my $usage = "Usage:
                   pw: power
                   pd: JP2026 privacy switch down (enabled)
                   pu: JP2026 privacy switch up (disabled)
+
+                  play:  dbus/mpris/bluetooth play
+                  pause: dbus/mpris/bluetooth pause
+                  next:  dbus/mpris/bluetooth next
+                  prev:  dbus/mpris/bluetooth prev
 
   BTN_PTRN is a sequence of button presses/releases, with optional short synonyms
   e.g.:
