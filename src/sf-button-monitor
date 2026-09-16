@@ -84,7 +84,8 @@ my $usage = "Usage:
     display this message
 
   $0
-    -listen to input devs: @$INPUT_DEVICES
+    -listen to input devs by model. current model ($MODEL_NAME) uses:
+      @$INPUT_DEVICES
     -parse bytes into button press/release events
     -split sequences of events into patterns
     -read actions and patterns from $CONFIG_FILE
