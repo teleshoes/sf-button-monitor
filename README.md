@@ -2,6 +2,9 @@ Sailfish Button Monitor
 
 | Device            | Status       |
 | ----------------- | ------------ |
+| JP 2026           | Working OOTB |
+| Xperia 10 III     | Working OOTB |
+| Xperia 10 II      | Working OOTB |
 | Xperia X          | Working OOTB |
 | Xperia X Compact  | Working OOTB |
 | Xperia XA2        | Working OOTB |
