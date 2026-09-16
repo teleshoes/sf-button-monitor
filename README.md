@@ -13,7 +13,7 @@ Sailfish Button Monitor
 | (everything else) | ???          |
 
 ----------
-Copyright (c) 2020 Elliot Wolk
+Copyright (c) 2020,2026 Elliot Wolk
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
