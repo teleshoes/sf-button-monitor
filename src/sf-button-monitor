@@ -22,7 +22,7 @@ my $INPUT_DEVICES_BY_MODEL_NAME = {
   h8314  => ['/dev/input/event0', '/dev/input/event3'],
   xqau51 => ['/dev/input/event0', '/dev/input/event5'],
   xqbt52 => ['/dev/input/event0', '/dev/input/event3'],
-  jp2601 => ['/dev/input/event0', '/dev/input/event2'],
+  jp2601 => ['/dev/input/event0', '/dev/input/event2', '/dev/input/event1'],
 };
 my $DEFAULT_INPUT_DEVICES = $$INPUT_DEVICES_BY_MODEL_NAME{$DEFAULT_MODEL_NAME};
 
@@ -149,13 +149,15 @@ my $usage = "Usage:
                 same as: <BTN>-press <BTN>-release
   GROUP     = <BTN>() | <BTN>( <BTN_PTRN> )
                 same as: <BTN>-press <BTN_PTRN> <BTN>-release
-  BTN       = vu | vd | ch | cf | pw
+  BTN       = vu | vd | ch | cf | pw | pd | pu
                 the name of a physical hardware button
                   vu: volume up
                   vd: volume down
                   ch: camera half
                   cf: camera full
                   pw: power
+                  pd: JP2026 privacy switch down (enabled)
+                  pu: JP2026 privacy switch up (disabled)
 
   BTN_PTRN is a sequence of button presses/releases, with optional short synonyms
   e.g.:
@@ -181,6 +183,9 @@ my @BUTTONS = (
   [qw(16  CAM_HALF ch)],
   [qw(254 CAM_FULL cf)],
   [qw(116 POWER    pw)],
+
+  [qw(192 PRIV_DN  pd)], # JP2026 privacy switch enabled (down)
+  [qw(191 PRIV_UP  pu)], # JP2026 privacy switch disabled (up)
 
   [qw(201 CAM_FULL cf)], # google-assist button on Xperia 10 III => CAM_FULL
 
