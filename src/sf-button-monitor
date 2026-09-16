@@ -22,6 +22,7 @@ my $INPUT_DEVICES_BY_MODEL_NAME = {
   h8314  => ['/dev/input/event0', '/dev/input/event3'],
   xqau51 => ['/dev/input/event0', '/dev/input/event5'],
   xqbt52 => ['/dev/input/event0', '/dev/input/event3'],
+  jp2601 => ['/dev/input/event0', '/dev/input/event2'],
 };
 my $DEFAULT_INPUT_DEVICES = $$INPUT_DEVICES_BY_MODEL_NAME{$DEFAULT_MODEL_NAME};
 
