@@ -12,8 +12,10 @@ my $EVENT_BYTE_SIZE =    $IS_64_BIT ? 48 : 32;
 my $BTN_ID_BYTE_INDEX =  $IS_64_BIT ? 18 : 10;
 my $BTN_VAL_BYTE_INDEX = $IS_64_BIT ? 20 : 12;
 
-my $MODEL_NAME = lc $1 if `ssu mo 2>/dev/null` =~ /^Device model is: (\w+)$/;
+my $SSU_MO = `ssu mo 2>/dev/null` =~ /^Device model is: (\w+)$/ ? "$1" : undef;
 my $DEFAULT_MODEL_NAME = $IS_64_BIT ? "xqbt52" : "f5121";
+
+my $MODEL_NAME = defined $SSU_MO ? $SSU_MO : $DEFAULT_MODEL_NAME;
 
 my $INPUT_DEVICES_BY_MODEL_NAME = {
   f5121  => ['/dev/input/event4'],
